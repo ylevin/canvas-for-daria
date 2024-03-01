@@ -480,6 +480,9 @@ function save() {
 
 function load() {
     matrix.fromBase64(document.getElementById('data').value)
+    document.getElementById("width").value = matrix.width
+    document.getElementById("height").value = matrix.height
+    setSize()
 }
 
 </script>
