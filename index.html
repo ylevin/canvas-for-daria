@@ -62,10 +62,6 @@
         <br>
         <label for="cell-size-range">S:</label>
         <input id="cell-size-range" type="range" min="5" max="30" value="15" style="width: 600px"/>
-        <br>
-        <textarea id="data"></textarea>
-        <button onclick="load()">Load</button>
-        <button onclick="save()">Save</button>
     </div>
 </div>
 
@@ -321,9 +317,13 @@ class Matrix {
 }
 
 class CanvasMatrix extends Matrix {
-    constructor(canvas, width, height, cellSize, borderSize, bgColor, gridColor) {
+    constructor(canvas, width, height, cellSize, borderSize, bgColor, gridColor, onUpdate = null) {
         super(canvas, cellSize, borderSize, width, height, bgColor, gridColor)
+        this.onUpdate = function () {}
         this.initialize()
+        if (onUpdate != null) {
+            this.onUpdate = onUpdate
+        }
     }
 
     setColor(color) {
@@ -333,6 +333,12 @@ class CanvasMatrix extends Matrix {
 
     onPickCell(x, y) {
         this.draw(x, y)
+        this.onUpdate()
+    }
+
+    applySize() {
+        super.applySize()
+        this.onUpdate()
     }
 
     fillAll(bgColor) {
@@ -346,6 +352,7 @@ class CanvasMatrix extends Matrix {
             }
         }
         this.ctx.fillStyle = color
+        this.onUpdate()
     }
 
     duplicateH() {
@@ -358,6 +365,7 @@ class CanvasMatrix extends Matrix {
             }
         }
         this.ctx.fillStyle = color
+        this.onUpdate()
     }
 
     duplicateV() {
@@ -370,6 +378,7 @@ class CanvasMatrix extends Matrix {
             }
         }
         this.ctx.fillStyle = color
+        this.onUpdate()
     }
 }
 
@@ -397,10 +406,17 @@ class ColorPicker extends Matrix {
     }
 }
 
+function saveInUrl() {
+    const urlParams = new URLSearchParams(window.location.search)
+    urlParams.set('data', matrix.toBase64())
+    window.history.replaceState(null, null, "?" + urlParams.toString());
+}
 
 const matrix = new CanvasMatrix(
     document.getElementById('main'),
-    DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_CELL_SIZE, 1, DEFAULT_COLOR, GRID_COLOR
+    DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_CELL_SIZE,
+    1, DEFAULT_COLOR, GRID_COLOR,
+    saveInUrl
 )
 
 const colorPicker = new ColorPicker(
@@ -474,15 +490,18 @@ function fillCanvas() {
     matrix.fillAll(matrix.color)
 }
 
-function save() {
-    document.getElementById('data').value = matrix.toBase64()
-}
-
-function load() {
-    matrix.fromBase64(document.getElementById('data').value)
+function loadFromString(value) {
+    matrix.fromBase64(value)
     document.getElementById("width").value = matrix.width
     document.getElementById("height").value = matrix.height
     setSize()
+}
+
+const urlParams = new URLSearchParams(window.location.search)
+
+let data = urlParams.get("data")
+if (data != null) {
+    loadFromString(data)
 }
 
 </script>
