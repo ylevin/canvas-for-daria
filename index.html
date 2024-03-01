@@ -4,9 +4,26 @@
     <meta charset="utf-8"/>
     <title>Drawer</title>
     <style>
-        .bottom {
-            position: absolute;
-            bottom: 0;
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        #top {
+            flex: 1;
+            overflow-y: auto;
+        }
+        #bottom {
+            height: auto;
+        }
+        #bottom, #top {
+            padding: 10px;
         }
         .big-button {
             height: 30px;
@@ -16,33 +33,42 @@
     </style>
 </head>
 <body>
-<canvas id="main"></canvas>
-<br>
-<canvas id="color-picker"></canvas>
-<br>
-<button onclick="fillCanvas()" class="big-button">Fill</button>
-<br>
-<button onclick="duplicateH()" class="big-button">Duplicate H</button>
-<br>
-<button onclick="duplicateV()" class="big-button">Duplicate V</button>
-<div class="bottom">
-    <label for="width">W:</label>
-    <input id="width" size="5"/>
-    <label for="height">H:</label>
-    <input id="height" size="5"/>
-    <label for="cell-size">S:</label>
-    <input id="cell-size" size="5"/>
-    <button onclick="setSize()">Apply</button>
-    <br>
-    <label for="width-range">W:</label>
-    <input id="width-range" type="range" min="1" max="300" value="70" style="width: 600px"/>
-    <br>
-    <label for="height-range">H:</label>
-    <input id="height-range" type="range" min="1" max="300" value="10" style="width: 600px"/>
-    <br>
-    <label for="cell-size-range">S:</label>
-    <input id="cell-size-range" type="range" min="5" max="30" value="15" style="width: 600px"/>
+<div id="container">
+    <div id="top">
+        <canvas id="main"></canvas>
+        <br>
+        <canvas id="color-picker"></canvas>
+        <br>
+        <button onclick="fillCanvas()" class="big-button">Fill</button>
+        <br>
+        <button onclick="duplicateH()" class="big-button">Duplicate H</button>
+        <br>
+        <button onclick="duplicateV()" class="big-button">Duplicate V</button>
+    </div>
+    <div id="bottom">
+        <label for="width">W:</label>
+        <input id="width" size="5"/>
+        <label for="height">H:</label>
+        <input id="height" size="5"/>
+        <label for="cell-size">S:</label>
+        <input id="cell-size" size="5"/>
+        <button onclick="setSize()">Apply</button>
+        <br>
+        <label for="width-range">W:</label>
+        <input id="width-range" type="range" min="1" max="255" value="70" style="width: 600px"/>
+        <br>
+        <label for="height-range">H:</label>
+        <input id="height-range" type="range" min="1" max="255" value="10" style="width: 600px"/>
+        <br>
+        <label for="cell-size-range">S:</label>
+        <input id="cell-size-range" type="range" min="5" max="30" value="15" style="width: 600px"/>
+        <br>
+        <textarea id="data"></textarea>
+        <button onclick="load()">Load</button>
+        <button onclick="save()">Save</button>
+    </div>
 </div>
+
 <script>
 
 const DEFAULT_COLOR = "#000000"
@@ -50,9 +76,21 @@ const GRID_COLOR = "#111111"
 const DEFAULT_WIDTH = 70
 const DEFAULT_HEIGHT = 10
 const DEFAULT_CELL_SIZE = 15
-const LIMIT = 300
+const LIMIT = 255
 const MAX_CELL_SIZE = 30
 const MIN_CELL_SIZE = 5
+
+
+function base64ToBytes(base64) {
+    const binString = atob(base64)
+    return Uint8Array.from(binString, (m) => m.codePointAt(0))
+}
+
+function bytesToBase64(bytes) {
+    const binString = String.fromCodePoint(...bytes)
+    return btoa(binString)
+}
+
 
 class Matrix {
     constructor(
@@ -143,9 +181,12 @@ class Matrix {
     applySize() {
         let color = this.ctx.fillStyle
 
-        let newArray = this.createArray(this.width, this.height, this.bgColor)
-        if (this.array != null) {
-            this.copyArray(this.array, newArray)
+        let newArray = null
+        if (this.array == null || this.array.length !== this.width || this.array.height !== this.height) {
+            newArray = this.createArray(this.width, this.height, this.bgColor)
+            if (this.array != null) {
+                this.copyArray(this.array, newArray)
+            }
         }
 
         this.canvas.width = this.width * this.cellSize + (this.width + 1) * this.borderSize
@@ -155,7 +196,9 @@ class Matrix {
 
         this.drawGrid()
 
-        this.array = newArray
+        if (newArray != null) {
+            this.array = newArray
+        }
         this.redrawArray()
 
         this.ctx.fillStyle = color
@@ -229,6 +272,51 @@ class Matrix {
         if (this.mouseDown) {
             this.onPick(e.offsetX, e.offsetY)
         }
+    }
+
+    toArray() {
+        let data = new Array(2 + this.width * this.height * 3)
+        let i = 0
+        data[i++] = this.width
+        data[i++] = this.height
+        for (let x = 0; x < this.width; x++) {
+            for (let y = 0; y < this.height; y++) {
+                let hex = this.array[x][y].replace('#', '')
+                data[i++] = parseInt(hex.substring(0, 2), 16)
+                data[i++] = parseInt(hex.substring(2, 4), 16)
+                data[i++] = parseInt(hex.substring(4, 6), 16)
+            }
+        }
+        return data
+    }
+
+    fromArray(data) {
+        let i = 0
+        let w = data[i++]
+        let h = data[i++]
+        let newArray = this.createArray(w, h, DEFAULT_COLOR)
+
+        for (let x = 0; x < w; x++) {
+            for (let y = 0; y < h; y++) {
+                let r = data[i++].toString(16).padStart(2, '0')
+                let g = data[i++].toString(16).padStart(2, '0')
+                let b = data[i++].toString(16).padStart(2, '0')
+                newArray[x][y] = '#' + r + g + b
+            }
+        }
+
+        this.array = newArray
+        this.width = w
+        this.height = h
+        this.applySize()
+    }
+
+    toBase64() {
+        return bytesToBase64(this.toArray())
+    }
+
+    fromBase64(base64) {
+        this.fromArray(base64ToBytes(base64))
     }
 }
 
@@ -384,6 +472,14 @@ function duplicateV() {
 
 function fillCanvas() {
     matrix.fillAll(matrix.color)
+}
+
+function save() {
+    document.getElementById('data').value = matrix.toBase64()
+}
+
+function load() {
+    matrix.fromBase64(document.getElementById('data').value)
 }
 
 </script>
