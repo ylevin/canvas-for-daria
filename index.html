@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <title>Drawer</title>
+    <style>
+        .bottom {
+            position: absolute;
+            bottom: 0;
+        }
+        .big-button {
+            height: 30px;
+            width: 320px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+<canvas id="main"></canvas>
+<br>
+<canvas id="color-picker"></canvas>
+<br>
+<button onclick="fillCanvas()" class="big-button">Fill</button>
+<br>
+<button onclick="duplicateH()" class="big-button">Duplicate H</button>
+<br>
+<button onclick="duplicateV()" class="big-button">Duplicate V</button>
+<div class="bottom">
+    <label for="width">W:</label>
+    <input id="width" size="5"/>
+    <label for="height">H:</label>
+    <input id="height" size="5"/>
+    <label for="cell-size">S:</label>
+    <input id="cell-size" size="5"/>
+    <button onclick="setSize()">Apply</button>
+    <br>
+    <label for="width-range">W:</label>
+    <input id="width-range" type="range" min="1" max="300" value="70" style="width: 600px"/>
+    <br>
+    <label for="height-range">H:</label>
+    <input id="height-range" type="range" min="1" max="300" value="10" style="width: 600px"/>
+    <br>
+    <label for="cell-size-range">S:</label>
+    <input id="cell-size-range" type="range" min="5" max="30" value="15" style="width: 600px"/>
+</div>
+<script>
+
+const DEFAULT_COLOR = "#000000"
+const GRID_COLOR = "#111111"
+const DEFAULT_WIDTH = 70
+const DEFAULT_HEIGHT = 10
+const DEFAULT_CELL_SIZE = 15
+const LIMIT = 300
+const MAX_CELL_SIZE = 30
+const MIN_CELL_SIZE = 5
+
+class Matrix {
+    constructor(
+        canvas,
+        cellSize,
+        borderSize,
+        width,
+        height,
+        bgColor,
+        gridColor,
+    ) {
+        this.canvas = canvas
+        this.cellSize = cellSize
+        this.borderSize = borderSize
+        this.ctx = canvas.getContext("2d")
+        this.width = width
+        this.height = height
+        this.mouseDown = false
+        this.bgColor = bgColor
+        this.gridColor = gridColor
+        this.array = null
+    }
+
+    createArray(w, h, color) {
+        let array = new Array(w)
+        for (let x = 0; x < w; x++) {
+            array[x] = new Array(h)
+            for (let y = 0; y < h; y++) {
+                array[x][y] = color
+            }
+        }
+        return array
+    }
+
+    drawGrid() {
+        let color = this.ctx.fillStyle
+        this.ctx.fillStyle = this.gridColor
+        for (let x = 0; x <= this.width; x++) {
+            this.ctx.fillRect(
+                x * (this.borderSize + this.cellSize), 0,
+                this.borderSize, this.canvas.height
+            )
+        }
+        for (let y = 0; y <= this.height; y++) {
+            this.ctx.fillRect(
+                0, y * (this.borderSize + this.cellSize),
+                this.canvas.width, this.borderSize
+            )
+        }
+        this.ctx.fillStyle = color
+    }
+
+    drawGridCell(x, y, gridColor) {
+        let color = this.ctx.fillStyle
+        this.ctx.fillStyle = gridColor
+        let fullCellSize = this.cellSize + this.borderSize
+        let xCoord = x * fullCellSize
+        let yCoord = y * fullCellSize
+        let borderLength = this.borderSize * 2 + this.cellSize
+        this.ctx.fillRect(xCoord, yCoord, borderLength, this.borderSize)
+        this.ctx.fillRect(xCoord, yCoord, this.borderSize, borderLength)
+        this.ctx.fillRect(xCoord, yCoord + fullCellSize, borderLength, this.borderSize)
+        this.ctx.fillRect(xCoord + fullCellSize, yCoord, this.borderSize, borderLength)
+        this.ctx.fillStyle = color
+    }
+
+    copyArray(oldArray, newArray) {
+        let w = Math.min(oldArray.length, newArray.length)
+        let h = Math.min(oldArray[0].length, newArray[0].length)
+        for (let x = 0; x < w; x++) {
+            for (let y = 0; y < h; y++) {
+                newArray[x][y] = oldArray[x][y]
+            }
+        }
+    }
+
+    redrawArray() {
+        for (let x = 0; x < this.width; x++) {
+            for (let y = 0; y < this.height; y++) {
+                if (this.array[x][y] !== this.bgColor) {
+                    this.ctx.fillStyle = this.array[x][y]
+                    this.fillCell(x, y)
+                }
+            }
+        }
+    }
+
+    applySize() {
+        let color = this.ctx.fillStyle
+
+        let newArray = this.createArray(this.width, this.height, this.bgColor)
+        if (this.array != null) {
+            this.copyArray(this.array, newArray)
+        }
+
+        this.canvas.width = this.width * this.cellSize + (this.width + 1) * this.borderSize
+        this.canvas.height = this.height * this.cellSize + (this.height + 1) * this.borderSize
+        this.ctx.fillStyle = this.bgColor
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
+
+        this.drawGrid()
+
+        this.array = newArray
+        this.redrawArray()
+
+        this.ctx.fillStyle = color
+    }
+
+    initialize() {
+        this.applySize()
+        let that = this
+        this.canvas.addEventListener("mousedown", function(e) { that.onMouseDown(e) })
+        this.canvas.addEventListener("mouseup",  function(e) { that.onMouseUp(e) })
+        this.canvas.addEventListener("mousemove",  function(e) { that.onMouseMove(e) })
+    }
+
+    draw(x, y) {
+        this.array[x][y] = this.ctx.fillStyle
+        this.fillCell(x, y)
+    }
+
+    fillCell(x, y) {
+        this.ctx.fillRect(
+            x * (this.cellSize + this.borderSize) + this.borderSize,
+            y * (this.cellSize + this.borderSize) + this.borderSize,
+            this.cellSize, this.cellSize
+        )
+    }
+
+    getCellCoord(v) {
+        return Math.floor(v / (this.cellSize + this.borderSize))
+    }
+
+    onPickCell(x, y) {
+        throw new Error("Not implemented");
+    }
+
+    onPick(x, y) {
+        x = this.getCellCoord(x)
+        y = this.getCellCoord(y)
+        if (x < 0 || y < 0 || x >= this.width || y >= this.height) {
+            return
+        }
+        this.onPickCell(x, y)
+    }
+
+    resize(w, h, cellSize) {
+        if (w === this.width && h === this.height && cellSize === this.cellSize) {
+            return
+        }
+        this.width = w
+        this.height = h
+        this.cellSize = cellSize
+        this.applySize()
+    }
+
+    onMouseDown(e) {
+        if (e.button !== 0) {
+            return
+        }
+        this.mouseDown = true
+        this.onPick(e.offsetX, e.offsetY)
+    }
+
+    onMouseUp(e) {
+        if (e.button !== 0) {
+            return
+        }
+        this.mouseDown = false
+        this.onPick(e.offsetX, e.offsetY)
+    }
+
+    onMouseMove(e) {
+        if (this.mouseDown) {
+            this.onPick(e.offsetX, e.offsetY)
+        }
+    }
+}
+
+class CanvasMatrix extends Matrix {
+    constructor(canvas, width, height, cellSize, borderSize, bgColor, gridColor) {
+        super(canvas, cellSize, borderSize, width, height, bgColor, gridColor)
+        this.initialize()
+    }
+
+    setColor(color) {
+        this.color = color
+        this.ctx.fillStyle = this.color
+    }
+
+    onPickCell(x, y) {
+        this.draw(x, y)
+    }
+
+    fillAll(bgColor) {
+        this.bgColor = bgColor
+
+        let color = this.ctx.fillStyle
+        this.ctx.fillStyle = bgColor
+        for (let x = 0; x < this.width; x++) {
+            for (let y = 0; y < this.height; y++) {
+                this.draw(x, y)
+            }
+        }
+        this.ctx.fillStyle = color
+    }
+
+    duplicateH() {
+        let color = this.ctx.fillStyle
+        let copyWidth = this.width / 2
+        for (let x = 0; x < copyWidth; x++) {
+            for (let y = 0; y < this.height; y++) {
+                this.ctx.fillStyle = this.array[x][y]
+                this.draw(x + copyWidth, y)
+            }
+        }
+        this.ctx.fillStyle = color
+    }
+
+    duplicateV() {
+        let color = this.ctx.fillStyle
+        let copyHeight = this.height / 2
+        for (let x = 0; x < this.width; x++) {
+            for (let y = 0; y < copyHeight; y++) {
+                this.ctx.fillStyle = this.array[x][y]
+                this.draw(x, y + copyHeight)
+            }
+        }
+        this.ctx.fillStyle = color
+    }
+}
+
+class ColorPicker extends Matrix {
+    constructor(canvas, colors, matrixCanvas, cellSize, borderSize, gridColor, selectedColor) {
+        super(canvas, cellSize, borderSize, colors.length, 1, DEFAULT_COLOR, gridColor)
+        this.colors = colors
+        this.matrixCanvas = matrixCanvas
+        this.selectedColor = selectedColor
+        this.initialize()
+    }
+
+    initialize() {
+        super.initialize()
+        for (let i = 0; i < this.colors.length; i++) {
+            this.ctx.fillStyle = this.colors[i]
+            this.draw(i, 0)
+        }
+    }
+
+    onPickCell(x, y) {
+        this.drawGrid()
+        this.drawGridCell(x, y, this.selectedColor)
+        this.matrixCanvas.setColor(this.colors[x])
+    }
+}
+
+
+const matrix = new CanvasMatrix(
+    document.getElementById('main'),
+    DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_CELL_SIZE, 1, DEFAULT_COLOR, GRID_COLOR
+)
+
+const colorPicker = new ColorPicker(
+    document.getElementById('color-picker'),
+    [
+        '#EE3300', '#FF9900', '#FFF380', '#99ff99',
+        '#00D3F3', '#004DFF', '#6900C6',
+        '#000000', '#FFFFFF', '#666666'
+    ],
+    matrix, 30, 3, GRID_COLOR, '#999999'
+)
+
+colorPicker.onPick(0, 0)
+
+
+document.getElementById("width").value = DEFAULT_WIDTH
+document.getElementById("height").value = DEFAULT_HEIGHT
+document.getElementById("cell-size").value = DEFAULT_CELL_SIZE
+
+document.getElementById("height-range").oninput = function() {
+    document.getElementById("height").value = this.value
+    setSize()
+}
+
+document.getElementById("width-range").oninput = function() {
+    document.getElementById("width").value = this.value
+    setSize()
+}
+
+document.getElementById("cell-size-range").oninput = function() {
+    document.getElementById("cell-size").value = this.value
+    setSize()
+}
+
+function setSize() {
+    let w = parseInt(document.getElementById("width").value)
+    let h = parseInt(document.getElementById("height").value)
+    let s = parseInt(document.getElementById("cell-size").value)
+    if (isNaN(w) || isNaN(h) || w < 1 || h < 1 || w > LIMIT || h > LIMIT
+        || s < MIN_CELL_SIZE || isNaN(s) || s > MAX_CELL_SIZE) {
+        return
+    }
+    document.getElementById("width-range").value = w
+    document.getElementById("height-range").value = h
+    document.getElementById("cell-size-range").value = s
+    console.log("Resize: (" + w + ", " + h + ") * " + s)
+    matrix.resize(w, h, s)
+}
+
+function duplicateH() {
+    if (matrix.width * 2 > LIMIT) {
+        alert("Max Width Exceeded")
+        return
+    }
+    document.getElementById("width").value = matrix.width * 2
+    setSize()
+    matrix.duplicateH()
+}
+
+function duplicateV() {
+    if (matrix.height * 2 > LIMIT) {
+        alert("Max Height Exceeded")
+        return
+    }
+    document.getElementById("height").value = matrix.height * 2
+    setSize()
+    matrix.duplicateV()
+}
+
+function fillCanvas() {
+    matrix.fillAll(matrix.color)
+}
+
+</script>
+</body>
+</html>
