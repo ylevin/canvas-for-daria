@@ -453,11 +453,18 @@ class ColorPicker extends Matrix {
             this.onPickCell(0, 0)
         }
     }
+
+    fromArray(data) {
+        super.fromArray(data)
+        this.colors = this.array.map((x) => x[0])
+        console.log(this.colors)
+    }
 }
 
 function saveInUrl() {
     const urlParams = new URLSearchParams(window.location.search)
     urlParams.set('data', matrix.toBase64())
+    urlParams.set('palette', colorPicker.toBase64())
     window.history.replaceState(null, null, "?" + urlParams.toString());
 }
 
@@ -539,11 +546,18 @@ function fillCanvas() {
     matrix.fillAll(matrix.color)
 }
 
-function loadFromString(value) {
-    matrix.fromBase64(value)
-    document.getElementById("width").value = matrix.width
-    document.getElementById("height").value = matrix.height
-    setSize()
+function loadFromString(matrixData, paletteData) {
+    if (matrixData != null) {
+        matrix.fromBase64(matrixData)
+        document.getElementById("width").value = matrix.width
+        document.getElementById("height").value = matrix.height
+        setSize()
+    }
+    if (paletteData != null) {
+        colorPicker.fromBase64(paletteData)
+        colorPicker.onPickCell(0, 0)
+    }
+
     let colors = matrix.getColorsSet()
     colors.forEach((x) => {
         colorPicker.addColor(x)
@@ -553,18 +567,19 @@ function loadFromString(value) {
 
 function addColor() {
     colorPicker.addColor(document.getElementById("new-color").value)
+    saveInUrl()
 }
 
 function removeColor() {
     colorPicker.removeSelectedColor()
+    saveInUrl()
 }
 
 const urlParams = new URLSearchParams(window.location.search)
 
-let data = urlParams.get("data")
-if (data != null) {
-    loadFromString(data)
-}
+let matrixData = urlParams.get("data")
+let palette = urlParams.get("palette")
+loadFromString(matrixData, palette)
 
 </script>
 </body>
