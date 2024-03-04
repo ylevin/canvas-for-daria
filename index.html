@@ -39,17 +39,33 @@
         <br>
         <canvas id="color-picker"></canvas>
         <br>
-        <button onclick="fillCanvas()" class="big-button">Fill</button>
-        <br>
-        <button onclick="duplicateH()" class="big-button">Duplicate H</button>
-        <br>
-        <button onclick="duplicateV()" class="big-button">Duplicate V</button>
-        <br>
-        <input type="color" id="new-color" class="big-button">
-        <br>
-        <button onclick="addColor()" class="big-button">Add Color</button>
-        <br>
-        <button onclick="removeColor()" class="big-button">Remove Color</button>
+        <table>
+            <tr>
+                <td>
+                    <input type="color" id="new-color" class="big-button">
+                </td>
+                <td>
+                    <button onclick="fillCanvas()" class="big-button">Fill</button>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <button onclick="addColor()" class="big-button">Add Color</button>
+                </td>
+                <td>
+                    <button onclick="duplicateH()" class="big-button">Duplicate H</button>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <button onclick="addColor()" class="big-button">Remove Selected Color</button>
+                </td>
+                <td>
+                    <button onclick="duplicateV()" class="big-button">Duplicate V</button>
+                </td>
+            </tr>
+        </table>
+
     </div>
     <div id="bottom">
         <label for="width">W:</label>
@@ -268,6 +284,13 @@ class Matrix {
         }
         this.mouseDown = false
         this.onPick(e.offsetX, e.offsetY)
+    }
+
+    releaseMouse(e) {
+        if (e.button !== 0) {
+            return
+        }
+        this.mouseDown = false
     }
 
     onMouseMove(e) {
@@ -580,6 +603,11 @@ const urlParams = new URLSearchParams(window.location.search)
 let matrixData = urlParams.get("data")
 let palette = urlParams.get("palette")
 loadFromString(matrixData, palette)
+
+window.addEventListener("mouseup", function (e) {
+    colorPicker.releaseMouse(e)
+    matrix.releaseMouse(e)
+})
 
 </script>
 </body>
