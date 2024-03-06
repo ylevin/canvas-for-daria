@@ -32,6 +32,9 @@
         body {
             user-select: none;
         }
+        .range-slider {
+            width: 600px
+        }
     </style>
 </head>
 <body>
@@ -40,7 +43,8 @@
         <canvas id="main"></canvas>
         <br>
         <canvas id="color-picker"></canvas>
-        <br>
+    </div>
+    <div id="bottom">
         <table id="buttons">
             <tr>
                 <td style="width: 30px">
@@ -75,25 +79,28 @@
                 </td>
             </tr>
         </table>
-
-    </div>
-    <div id="bottom">
-        <label for="width">W:</label>
-        <input id="width" size="5"/>
-        <label for="height">H:</label>
-        <input id="height" size="5"/>
-        <label for="cell-size">S:</label>
-        <input id="cell-size" size="5"/>
-        <button onclick="setSize()">Apply</button>
-        <br>
-        <label for="width-range">W:</label>
-        <input id="width-range" type="range" min="1" max="255" value="70" style="width: 600px"/>
-        <br>
-        <label for="height-range">H:</label>
-        <input id="height-range" type="range" min="1" max="255" value="10" style="width: 600px"/>
-        <br>
-        <label for="cell-size-range">S:</label>
-        <input id="cell-size-range" type="range" min="5" max="30" value="15" style="width: 600px"/>
+        <table>
+            <tr>
+                <td>W:</td>
+                <td><input id="width-range" type="range" min="1" max="255" value="70" class="range-slider"/></td>
+                <td><input id="width" size="5"/></td>
+            </tr>
+            <tr>
+                <td>H:</td>
+                <td><input id="height-range" type="range" min="1" max="255" value="10" class="range-slider"/></td>
+                <td><input id="height" size="5"/></td>
+            </tr>
+            <tr>
+                <td>S:</td>
+                <td><input id="cell-size-range" type="range" min="5" max="30" value="15" class="range-slider"/></td>
+                <td><input id="cell-size" size="5"/></td>
+            </tr>
+            <tr>
+                <td colspan="3">
+                    <button id="apply-button" onclick="applySize()" class="big-button" disabled>Apply</button>
+                </td>
+            </tr>
+        </table>
     </div>
 </div>
 
@@ -107,6 +114,7 @@ const DEFAULT_CELL_SIZE = 15
 const LIMIT = 255
 const MAX_CELL_SIZE = 30
 const MIN_CELL_SIZE = 5
+const STACK_LIMIT = 100
 
 
 function base64ToBytes(base64) {
@@ -508,9 +516,10 @@ class State {
 }
 
 class StateStack {
-    constructor() {
+    constructor(limit) {
         this.stackUndo = []
         this.stackRedo = []
+        this.limit = limit
     }
 
     save(state) {
@@ -523,6 +532,9 @@ class StateStack {
     commit() {
         let state = new State(matrix.toBase64(), colorPicker.toBase64())
         this.stackUndo.push(state)
+        if (this.stackUndo.length > this.limit) {
+            this.stackUndo.splice(0, this.stackUndo.length - this.limit)
+        }
         this.stackRedo = []
         this.save(state)
     }
@@ -570,7 +582,7 @@ class StateStack {
     }
 }
 
-const stack = new StateStack()
+const stack = new StateStack(STACK_LIMIT)
 
 const matrix = new CanvasMatrix(
     document.getElementById('main'),
@@ -590,9 +602,6 @@ const colorPicker = new ColorPicker(
     matrix, 30, 3, GRID_COLOR, '#999999'
 )
 
-colorPicker.onPick(0, 0)
-
-
 document.getElementById("width").value = DEFAULT_WIDTH
 document.getElementById("height").value = DEFAULT_HEIGHT
 document.getElementById("cell-size").value = DEFAULT_CELL_SIZE
@@ -600,7 +609,6 @@ document.getElementById("cell-size").value = DEFAULT_CELL_SIZE
 document.getElementById("height-range").oninput = function() {
     document.getElementById("height").value = this.value
     setSize()
-    stack.commit()
 }
 
 document.getElementById("width-range").oninput = function() {
@@ -633,6 +641,29 @@ function setSize() {
     document.getElementById("height-range").value = h
     document.getElementById("cell-size-range").value = s
     matrix.resize(w, h, s)
+}
+
+function updateApplyButton() {
+    let w = parseInt(document.getElementById("width").value)
+    let h = parseInt(document.getElementById("height").value)
+    let s = parseInt(document.getElementById("cell-size").value)
+    let button = document.getElementById("apply-button")
+    if (isNaN(w) || isNaN(h) || w < 1 || h < 1 || w > LIMIT || h > LIMIT
+        || s < MIN_CELL_SIZE || isNaN(s) || s > MAX_CELL_SIZE) {
+        button.disabled = true
+        return
+    }
+    button.disabled = (w === matrix.width && h === matrix.height && s === matrix.cellSize)
+}
+
+document.getElementById('width').oninput = updateApplyButton
+document.getElementById('height').oninput = updateApplyButton
+document.getElementById('cell-size').oninput = updateApplyButton
+
+function applySize() {
+    setSize()
+    stack.commit()
+    updateApplyButton()
 }
 
 function duplicateH() {
@@ -682,6 +713,7 @@ function removeColor() {
 }
 
 function start() {
+    colorPicker.onPickCell(0, 0)
     const urlParams = new URLSearchParams(window.location.search)
     let matrixData = urlParams.get("data")
     let paletteData = urlParams.get("palette")
