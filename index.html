@@ -494,6 +494,10 @@ class ColorPicker extends Matrix {
         super.fromArray(data)
         this.colors = this.array.map((x) => x[0])
     }
+
+    getColorIndex(color) {
+        return this.colors.findIndex((x) => x === color)
+    }
 }
 
 class State {
@@ -517,7 +521,6 @@ class StateStack {
     }
 
     commit() {
-        console.log("Commit")
         let state = new State(matrix.toBase64(), colorPicker.toBase64())
         this.stackUndo.push(state)
         this.stackRedo = []
@@ -556,8 +559,13 @@ class StateStack {
             setSize()
         }
         if (paletteData != null) {
+            let i = colorPicker.getColorIndex(colorPicker.selectedColor)
             colorPicker.fromBase64(paletteData)
-            colorPicker.onPickCell(0, 0)
+            if (i < colorPicker.colors.length) {
+                colorPicker.onPickCell(i, 0)
+            } else {
+                colorPicker.onPickCell(colorPicker.colors.length - 1, 0)
+            }
         }
     }
 }
@@ -624,7 +632,6 @@ function setSize() {
     document.getElementById("width-range").value = w
     document.getElementById("height-range").value = h
     document.getElementById("cell-size-range").value = s
-    console.log("Resize: (" + w + ", " + h + ") * " + s)
     matrix.resize(w, h, s)
 }
 
