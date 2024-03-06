@@ -27,8 +27,10 @@
         }
         .big-button {
             height: 30px;
-            width: 320px;
-            margin: 5px;
+            width: 100%;
+        }
+        body {
+            user-select: none;
         }
     </style>
 </head>
@@ -39,29 +41,37 @@
         <br>
         <canvas id="color-picker"></canvas>
         <br>
-        <table>
+        <table id="buttons">
             <tr>
-                <td>
+                <td style="width: 30px">
                     <input type="color" id="new-color" class="big-button">
                 </td>
-                <td>
-                    <button onclick="fillCanvas()" class="big-button">Fill</button>
+                <td style="width: 160px">
+                    <button onclick="addColor()" class="big-button">Add Color</button>
+                </td>
+                <td style="width: 200px">
+                    <button onclick="removeColor()" class="big-button">Remove Selected Color</button>
                 </td>
             </tr>
             <tr>
-                <td>
-                    <button onclick="addColor()" class="big-button">Add Color</button>
+                <td colspan="2">
+                    <button onclick="duplicateV()" class="big-button">Duplicate V</button>
                 </td>
                 <td>
                     <button onclick="duplicateH()" class="big-button">Duplicate H</button>
                 </td>
             </tr>
             <tr>
-                <td>
-                    <button onclick="addColor()" class="big-button">Remove Selected Color</button>
+                <td colspan="3">
+                    <button onclick="fillCanvas()" class="big-button">Fill Selected Color</button>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2">
+                    <button onclick="undo()" class="big-button">Undo</button>
                 </td>
                 <td>
-                    <button onclick="duplicateV()" class="big-button">Duplicate V</button>
+                    <button onclick="redo()" class="big-button">Redo</button>
                 </td>
             </tr>
         </table>
@@ -130,6 +140,12 @@ class Matrix {
         this.bgColor = bgColor
         this.gridColor = gridColor
         this.array = null
+        this.onUpdate = function () {}
+        this.needUpdate = false
+    }
+
+    setOnUpdate(action) {
+        this.onUpdate = action
     }
 
     createArray(w, h, color) {
@@ -258,6 +274,7 @@ class Matrix {
             return
         }
         this.onPickCell(x, y)
+        this.needUpdate = true
     }
 
     resize(w, h, cellSize) {
@@ -284,6 +301,8 @@ class Matrix {
         }
         this.mouseDown = false
         this.onPick(e.offsetX, e.offsetY)
+        this.onUpdate()
+        this.needUpdate = false
     }
 
     releaseMouse(e) {
@@ -291,6 +310,10 @@ class Matrix {
             return
         }
         this.mouseDown = false
+        if (this.needUpdate) {
+            this.onUpdate()
+            this.needUpdate = false
+        }
     }
 
     onMouseMove(e) {
@@ -372,12 +395,6 @@ class CanvasMatrix extends Matrix {
 
     onPickCell(x, y) {
         this.draw(x, y)
-        this.onUpdate()
-    }
-
-    applySize() {
-        super.applySize()
-        this.onUpdate()
     }
 
     fillAll(bgColor) {
@@ -391,7 +408,6 @@ class CanvasMatrix extends Matrix {
             }
         }
         this.ctx.fillStyle = color
-        this.onUpdate()
     }
 
     duplicateH() {
@@ -404,7 +420,6 @@ class CanvasMatrix extends Matrix {
             }
         }
         this.ctx.fillStyle = color
-        this.onUpdate()
     }
 
     duplicateV() {
@@ -417,7 +432,6 @@ class CanvasMatrix extends Matrix {
             }
         }
         this.ctx.fillStyle = color
-        this.onUpdate()
     }
 }
 
@@ -448,7 +462,6 @@ class ColorPicker extends Matrix {
         this.drawGridCell(x, y, this.selectedBorderColor)
         this.selectedColor = this.colors[x]
         this.matrixCanvas.setColor(this.selectedColor)
-        console.log(this.selectedColor)
     }
 
     addColor(color) {
@@ -480,23 +493,84 @@ class ColorPicker extends Matrix {
     fromArray(data) {
         super.fromArray(data)
         this.colors = this.array.map((x) => x[0])
-        console.log(this.colors)
     }
 }
 
-function saveInUrl() {
-    const urlParams = new URLSearchParams(window.location.search)
-    urlParams.set('data', matrix.toBase64())
-    urlParams.set('palette', colorPicker.toBase64())
-    window.history.replaceState(null, null, "?" + urlParams.toString());
+class State {
+    constructor(canvasState, paletteState) {
+        this.canvasState = canvasState
+        this.paletteState = paletteState
+    }
 }
+
+class StateStack {
+    constructor() {
+        this.stackUndo = []
+        this.stackRedo = []
+    }
+
+    save(state) {
+        const urlParams = new URLSearchParams(window.location.search)
+        urlParams.set('data', state.canvasState)
+        urlParams.set('palette', state.paletteState)
+        window.history.replaceState(null, null, "?" + urlParams.toString());
+    }
+
+    commit() {
+        console.log("Commit")
+        let state = new State(matrix.toBase64(), colorPicker.toBase64())
+        this.stackUndo.push(state)
+        this.stackRedo = []
+        this.save(state)
+    }
+
+    applyFromStack() {
+        let state = this.stackUndo[this.stackUndo.length - 1]
+        this.loadData(state.canvasState, state.paletteState)
+        this.save(state)
+    }
+
+    undo() {
+        if (this.stackUndo.length === 1) {
+            return
+        }
+        let state = this.stackUndo.pop()
+        this.stackRedo.push(state)
+        this.applyFromStack()
+    }
+
+    redo() {
+        if (this.stackRedo.length === 0) {
+            return
+        }
+        let state = this.stackRedo.pop()
+        this.stackUndo.push(state)
+        this.applyFromStack()
+    }
+
+    loadData(matrixData, paletteData) {
+        if (matrixData != null) {
+            matrix.fromBase64(matrixData)
+            document.getElementById("width").value = matrix.width
+            document.getElementById("height").value = matrix.height
+            setSize()
+        }
+        if (paletteData != null) {
+            colorPicker.fromBase64(paletteData)
+            colorPicker.onPickCell(0, 0)
+        }
+    }
+}
+
+const stack = new StateStack()
 
 const matrix = new CanvasMatrix(
     document.getElementById('main'),
     DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_CELL_SIZE,
-    1, DEFAULT_COLOR, GRID_COLOR,
-    saveInUrl
+    1, DEFAULT_COLOR, GRID_COLOR
 )
+
+matrix.setOnUpdate(function () { stack.commit() })
 
 const colorPicker = new ColorPicker(
     document.getElementById('color-picker'),
@@ -518,11 +592,20 @@ document.getElementById("cell-size").value = DEFAULT_CELL_SIZE
 document.getElementById("height-range").oninput = function() {
     document.getElementById("height").value = this.value
     setSize()
+    stack.commit()
 }
 
 document.getElementById("width-range").oninput = function() {
     document.getElementById("width").value = this.value
     setSize()
+}
+
+document.getElementById("width-range").onmouseup = function () {
+    stack.commit()
+}
+
+document.getElementById("height-range").onmouseup = function () {
+    stack.commit()
 }
 
 document.getElementById("cell-size-range").oninput = function() {
@@ -553,6 +636,7 @@ function duplicateH() {
     document.getElementById("width").value = matrix.width * 2
     setSize()
     matrix.duplicateH()
+    stack.commit()
 }
 
 function duplicateV() {
@@ -563,24 +647,16 @@ function duplicateV() {
     document.getElementById("height").value = matrix.height * 2
     setSize()
     matrix.duplicateV()
+    stack.commit()
 }
 
 function fillCanvas() {
     matrix.fillAll(matrix.color)
+    stack.commit()
 }
 
 function loadFromString(matrixData, paletteData) {
-    if (matrixData != null) {
-        matrix.fromBase64(matrixData)
-        document.getElementById("width").value = matrix.width
-        document.getElementById("height").value = matrix.height
-        setSize()
-    }
-    if (paletteData != null) {
-        colorPicker.fromBase64(paletteData)
-        colorPicker.onPickCell(0, 0)
-    }
-
+    stack.loadData(matrixData, paletteData)
     let colors = matrix.getColorsSet()
     colors.forEach((x) => {
         colorPicker.addColor(x)
@@ -590,24 +666,38 @@ function loadFromString(matrixData, paletteData) {
 
 function addColor() {
     colorPicker.addColor(document.getElementById("new-color").value)
-    saveInUrl()
+    stack.commit()
 }
 
 function removeColor() {
     colorPicker.removeSelectedColor()
-    saveInUrl()
+    stack.commit()
 }
 
-const urlParams = new URLSearchParams(window.location.search)
-
-let matrixData = urlParams.get("data")
-let palette = urlParams.get("palette")
-loadFromString(matrixData, palette)
+function start() {
+    const urlParams = new URLSearchParams(window.location.search)
+    let matrixData = urlParams.get("data")
+    let paletteData = urlParams.get("palette")
+    loadFromString(matrixData, paletteData)
+    stack.commit()
+}
 
 window.addEventListener("mouseup", function (e) {
     colorPicker.releaseMouse(e)
     matrix.releaseMouse(e)
 })
+
+function undo() {
+    stack.undo()
+    setSize()
+}
+
+function redo() {
+    stack.redo()
+    setSize()
+}
+
+start()
 
 </script>
 </body>
