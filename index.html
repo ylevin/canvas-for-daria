@@ -72,10 +72,10 @@
             </tr>
             <tr>
                 <td colspan="2">
-                    <button onclick="undo()" class="big-button">Undo</button>
+                    <button onclick="undo()" class="big-button" id="undo">Undo</button>
                 </td>
                 <td>
-                    <button onclick="redo()" class="big-button">Redo</button>
+                    <button onclick="redo()" class="big-button" id="redo">Redo</button>
                 </td>
             </tr>
         </table>
@@ -526,7 +526,7 @@ class StateStack {
         const urlParams = new URLSearchParams(window.location.search)
         urlParams.set('data', state.canvasState)
         urlParams.set('palette', state.paletteState)
-        window.history.replaceState(null, null, "?" + urlParams.toString());
+        window.history.replaceState(null, null, "?" + urlParams.toString())
     }
 
     commit() {
@@ -537,6 +537,7 @@ class StateStack {
         }
         this.stackRedo = []
         this.save(state)
+        updateUndoRedoButtons()
     }
 
     applyFromStack() {
@@ -552,6 +553,7 @@ class StateStack {
         let state = this.stackUndo.pop()
         this.stackRedo.push(state)
         this.applyFromStack()
+        updateUndoRedoButtons()
     }
 
     redo() {
@@ -561,6 +563,7 @@ class StateStack {
         let state = this.stackRedo.pop()
         this.stackUndo.push(state)
         this.applyFromStack()
+        updateUndoRedoButtons()
     }
 
     loadData(matrixData, paletteData) {
@@ -734,6 +737,13 @@ function undo() {
 function redo() {
     stack.redo()
     setSize()
+}
+
+function updateUndoRedoButtons() {
+    let undoButton = document.getElementById('undo')
+    let redoButton = document.getElementById('redo')
+    undoButton.disabled = stack.stackUndo.length < 2
+    redoButton.disabled = stack.stackRedo.length < 1
 }
 
 start()
