@@ -29,6 +29,10 @@
             height: 30px;
             width: 100%;
         }
+        .big-input {
+            width: 100%;
+            font-size: 14pt;
+        }
         body {
             user-select: none;
         }
@@ -41,10 +45,10 @@
 <div id="container">
     <div id="top">
         <canvas id="main"></canvas>
-        <br>
-        <canvas id="color-picker"></canvas>
     </div>
     <div id="bottom">
+        <canvas id="color-picker"></canvas>
+
         <table id="buttons">
             <tr>
                 <td style="width: 30px">
@@ -84,11 +88,15 @@
                 <td>W:</td>
                 <td><input id="width-range" type="range" min="1" max="255" value="70" class="range-slider"/></td>
                 <td><input id="width" size="5"/></td>
+                <td style="width: 120px">
+                    <button onclick="toggleStickH()"  id="stick-h" class="big-button">Stick Left</button>
+                </td>
             </tr>
             <tr>
                 <td>H:</td>
                 <td><input id="height-range" type="range" min="1" max="255" value="10" class="range-slider"/></td>
                 <td><input id="height" size="5"/></td>
+                <td><button onclick="toggleStickV()" id="stick-v" class="big-button">Stick Top</button></td>
             </tr>
             <tr>
                 <td>S:</td>
@@ -98,6 +106,12 @@
             <tr>
                 <td colspan="3">
                     <button id="apply-button" onclick="applySize()" class="big-button" disabled>Apply</button>
+                </td>
+            </tr>
+            <tr>
+                <td>Title:</td>
+                <td colspan="2">
+                    <input placeholder="Drawer" id="title" type="text" class="big-input">
                 </td>
             </tr>
         </table>
@@ -150,6 +164,8 @@ class Matrix {
         this.array = null
         this.onUpdate = function () {}
         this.needUpdate = false
+        this.resizeStickTop = true
+        this.resizeStickLeft = true
     }
 
     setOnUpdate(action) {
@@ -199,12 +215,37 @@ class Matrix {
         this.ctx.fillStyle = color
     }
 
-    copyArray(oldArray, newArray) {
+    copyArray(oldArray, newArray, left = true, top = true) {
         let w = Math.min(oldArray.length, newArray.length)
         let h = Math.min(oldArray[0].length, newArray[0].length)
+
+        let offsetX = 0
+        let offsetY = 0
+        let newOffsetX = 0
+        let newOffsetY = 0
+
+        if (!left) {
+            let changeW = oldArray.length - newArray.length
+            if (changeW > 0) {
+                offsetX = changeW
+            } else {
+                newOffsetX = -changeW
+            }
+        }
+
+        if (!top) {
+            let changeH = oldArray[0].length - newArray[0].length
+            if (changeH > 0) {
+                offsetY = changeH
+            } else {
+                newOffsetY = -changeH
+            }
+        }
+
         for (let x = 0; x < w; x++) {
             for (let y = 0; y < h; y++) {
-                newArray[x][y] = oldArray[x][y]
+                newArray[x + newOffsetX][y + newOffsetY] =
+                    oldArray[x + offsetX][y + offsetY]
             }
         }
     }
@@ -227,7 +268,7 @@ class Matrix {
         if (this.array == null || this.array.length !== this.width || this.array.height !== this.height) {
             newArray = this.createArray(this.width, this.height, this.bgColor)
             if (this.array != null) {
-                this.copyArray(this.array, newArray)
+                this.copyArray(this.array, newArray, this.resizeStickLeft, this.resizeStickTop)
             }
         }
 
@@ -740,10 +781,27 @@ function redo() {
 }
 
 function updateUndoRedoButtons() {
-    let undoButton = document.getElementById('undo')
-    let redoButton = document.getElementById('redo')
-    undoButton.disabled = stack.stackUndo.length < 2
-    redoButton.disabled = stack.stackRedo.length < 1
+    document.getElementById('undo').disabled = stack.stackUndo.length < 2
+    document.getElementById('redo').disabled = stack.stackRedo.length < 1
+}
+
+function toggleStickH() {
+    matrix.resizeStickLeft = !matrix.resizeStickLeft
+    document.getElementById('stick-h').innerText = matrix.resizeStickLeft ? "Stick Left" : "Stick Right"
+}
+
+function toggleStickV() {
+    matrix.resizeStickTop = !matrix.resizeStickTop
+    document.getElementById('stick-v').innerText = matrix.resizeStickTop ? "Stick Top" : "Stick Bottom"
+}
+
+document.getElementById("title").oninput = function (e) {
+    let title = e.target.value
+    if (title !== '') {
+        document.title = title
+    } else {
+        document.title = "Drawer"
+    }
 }
 
 start()
